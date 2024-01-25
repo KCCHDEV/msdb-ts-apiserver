@@ -1,0 +1,23 @@
+{
+	"dependencies": {
+		"@types/body-parser": "^1.19.5",
+		"@types/express": "^4.17.21",
+		"@types/multer": "^1.4.11",
+		"@types/node": "^20.11.5",
+		"@types/uuid": "^9.0.7",
+		"axios": "^1.6.5",
+		"body-parser": "^1.20.2",
+		"express": "^4.18.2",
+		"form-data": "^4.0.0",
+		"fs": "0.0.1-security",
+		"multer": "1.4.5-lts.1",
+		"path": "^0.12.7",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.3.3",
+		"uuid": "^9.0.1"
+	},
+	"scripts": {
+		"start": "ts-node src/index.ts",
+		"build": "tsc"
+	}
+}
