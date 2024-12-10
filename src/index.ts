@@ -1,74 +1,81 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import { v4 as uuidv4 } from 'uuid';
-import Database from './msdb';
-import multer from 'multer';
+import Fastify from 'fastify';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyRateLimit from '@fastify/rate-limit';
+import initializeDatabase from './msdb';
 
-const app = express();
-const port: number = 4589;
-app.use(bodyParser.json());
-const upload = multer();
-app.use(upload.none());
-const key: string = "NayGolf125125"
-let db: any;
+const fastify = Fastify({ logger: true });
+const API_KEY = "NayGolf125125";
 
-app.post('/api/:key/:database/add/:tableName', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
-    const table = db.table(req.params.tableName);
-    const data = req.body;
-    console.log(data);
-    const id = data.id || uuidv4();
-    table.save(id, JSON.parse(data.db));
-    res.json({ message: 'Item added successfully' });
+fastify.register(fastifyMultipart);
+fastify.register(fastifyRateLimit, {
+  max: 100,
+  timeWindow: '1 minute',
+  keyGenerator: (req: any) => req.headers['x-api-key'] + ':' + (req.headers['x-real-ip'] || req.ip)
 });
 
-app.get('/api/:key/:database/get/:tableName/:dbkey', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    const table = db.table(req.params.tableName);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
-
-    const result = table.find(req.params.dbkey);
-    res.json(result);
+// Middleware to verify API key
+fastify.addHook('preHandler', async (request, reply) => {
+  const apiKey = request.headers['x-api-key'];
+  if (apiKey !== API_KEY) {
+    reply.code(401).send({ error: 'Invalid API key' });
+  }
 });
 
-app.get('/api/:key/:database/remove/:tableName/:dbkey', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    const table = db.table(req.params.tableName);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
+// Routes
+fastify.post('/:database/:table/add', async (request, reply) => {
+  const { database, table } = request.params as { database: string, table: string };
+  const data = await request.file();
+  if (!data) {
+    reply.code(400).send({ error: 'No file uploaded' });
+    return;
+  }
 
-    const result = table.remove(req.params.dbkey);
-    res.json({ message: 'Item remove successfully' });
+  const db = initializeDatabase(database)(table);
+  
+  if (!data.fields.data) {
+    reply.code(400).send({ error: 'Missing data field' });
+    return;
+  }
+
+  const dataField = data.fields.data;
+  if (!('value' in dataField)) {
+    reply.code(400).send({ error: 'Invalid data field format' });
+    return;
+  }
+
+  const parsedData = JSON.parse(dataField.value as string);
+  const id = data.fields.id && 'value' in data.fields.id ? data.fields.id.value as string : crypto.randomUUID();
+  
+  db.save(id, parsedData);
+  return { success: true };
 });
 
-
-app.get('/api/:key/:database/getall/:tableName', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    const table = db.table(req.params.tableName);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
-
-    const result = table.getAll(req.query.orderBy || 'asc');
-    res.json(result);
+fastify.get('/:database/:table/find/:id', async (request) => {
+  const { database, table, id } = request.params as { database: string, table: string, id: string };
+  return initializeDatabase(database)(table).find(id);
 });
 
-app.get('/api/:key/:database/random/:tableName', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    const table = db.table(req.params.tableName);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
-
-    const result = table.random();
-    res.json(result);
+fastify.get('/:database/:table/all', async (request) => {
+  const { database, table } = request.params as { database: string, table: string };
+  const orderBy = (request.query as any).orderBy || 'asc';
+  return initializeDatabase(database)(table).getAll(orderBy);
 });
 
-app.get('/api/:key/:database/getwhere/:tableName/:condition', (req: any, res: any) => {
-    db = new Database(req.params.database);
-    const table = db.table(req.params.tableName);
-    if (req.params.key !== key) return res.json({ message: 'KEY ERROR' });
-
-    const result = table.getWhere(req.params.condition);
-    res.json(result);
+fastify.get('/:database/:table/random', async (request) => {
+  const { database, table } = request.params as { database: string, table: string };
+  return initializeDatabase(database)(table).random();
 });
 
-app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
+fastify.post('/:database/:table/where', async (request) => {
+  const { database, table } = request.params as { database: string, table: string };
+  const condition = request.body as Record<string, any>;
+  return initializeDatabase(database)(table).getWhere(condition);
 });
+
+fastify.delete('/:database/:table/:id', async (request) => {
+  const { database, table, id } = request.params as { database: string, table: string, id: string };
+  initializeDatabase(database)(table).remove(id);
+  return { success: true };
+});
+
+fastify.listen({ port: 4589 });
