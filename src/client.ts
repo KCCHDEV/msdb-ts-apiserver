@@ -1,5 +1,4 @@
 import axios, { AxiosInstance } from 'axios';
-import FormData from 'form-data';
 
 class DatabaseClient {
   private api: AxiosInstance;
@@ -8,38 +7,46 @@ class DatabaseClient {
     this.api = axios.create({
       baseURL: baseUrl,
       headers: {
-        'x-api-key': apiKey
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
       }
     });
   }
 
   async addItem(database: string, table: string, data: any, id?: string) {
-    const formData = new FormData();
-    formData.append('data', JSON.stringify(data));
-    if (id) formData.append('id', id);
-    return this.api.post(`/${database}/${table}/add`, formData, {
-      headers: { ...formData.getHeaders() }
-    });
+    try {
+      const response = await this.api.post(`/${database}/${table}/add`, { data, id });
+      return response.data;
+    } catch (error) {
+      console.error('Add item error:', error);
+      throw error;
+    }
   }
 
   async getItem(database: string, table: string, id: string) {
-    return this.api.get(`/${database}/${table}/find/${id}`);
+    const response = await this.api.get(`/${database}/${table}/find/${id}`);
+    return response.data;
   }
 
   async getAllItems(database: string, table: string, orderBy: 'asc' | 'desc' = 'asc') {
-    return this.api.get(`/${database}/${table}/all`, { params: { orderBy } });
+    const response = await this.api.get(`/${database}/${table}/all`, { params: { orderBy } });
+    return response.data;
   }
 
   async getRandomItem(database: string, table: string) {
-    return this.api.get(`/${database}/${table}/random`);
+    const response = await this.api.get(`/${database}/${table}/random`);
+    return response.data;
   }
 
   async getWhere(database: string, table: string, condition: Record<string, any>) {
-    return this.api.post(`/${database}/${table}/where`, condition);
+    const response = await this.api.post(`/${database}/${table}/where`, condition);
+    return response.data;
   }
 
   async removeItem(database: string, table: string, id: string) {
-    return this.api.delete(`/${database}/${table}/${id}`);
+    // Send empty object as body to satisfy Fastify's JSON requirement
+    const response = await this.api.delete(`/${database}/${table}/${id}`, { data: {} });
+    return response.data;
   }
 }
 
